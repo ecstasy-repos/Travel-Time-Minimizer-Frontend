@@ -1,7 +1,7 @@
 <template>
    <div>
       <v-toolbar dark :color="black">
-      <v-spacer></v-spacer>
+      <v-spacer><button class="btn1" v-on:click="load()"><i class="fa fa-home"></i> Home</button></v-spacer>
       <div id="title1">SHORTEST-PATH-FINDING PROJECT</div>
       <v-spacer></v-spacer>
       <div>
@@ -18,37 +18,30 @@
     </div>
     </v-toolbar>
     <center>
-      <span id="question"> </span
-      >
+      <span id="question"> Enter Source and Destination : </span>
     </center>
-    <br>
-    <br>
     <div v-if="tableon">
     <v-container fluid>
           <v-row>
             <v-col cols="4">
     <v-autocomplete
                 v-model="selectedSource"
-                :items="desserts"
+                :items="routes"
                 class="mt-2"
                 label="Source"
                 outlined
                 dense
                 hide-details
-                item-value="from"
-                item-text="from"
                 :loading="isLoading"
               />
               <v-autocomplete
                 v-model="selectedDestination"
-                :items="desserts"
+                :items="routes"
                 label="Destination"
                 outlined
                 dense
                 class="mt-4"
                 hide-details
-                item-value="to"
-                item-text="to"
                 :loading="isLoading"
               />
               <br>
@@ -58,7 +51,22 @@
           
            <v-col cols="1"></v-col>
             <v-col cols="4">
-
+                <input
+          type="text"
+          class="form-control"
+          placeholder="Universal Search"
+          v-model="searchQuery"
+        />
+        <br>
+        <div class="input-group-append">
+          <button
+            class="btn btn-outline-secondary"
+            type="button"
+            @click="page = 1; retrieveRouteDetails();"
+          >
+            Search
+          </button>
+        </div>
             </v-col>
             </v-row>
     </v-container>
@@ -68,6 +76,7 @@
     :items="desserts"
     item-key="id"
     v-model="selectedRows"
+     hide-default-footer
     class="elevation-1"
     bgcolor="red">
       <template v-slot:item="{ item }">
@@ -81,6 +90,51 @@
         
     </template>
 </v-data-table>
+        
+        <div class="list row">
+    <div class="col-md-8">
+      <div class="input-group mb-3">
+        
+      </div>
+    </div>
+
+    <div class="col-md-12">
+      <div class="mb-3">
+        <b>Items per Page:</b>
+        <select v-model="pageSize" @change="handlePageSizeChange($event)">
+          <option v-for="size in pageSizes" :key="size" :value="size">
+            {{ size }}
+          </option>
+        </select>
+      </div>
+
+      <b-pagination
+        v-model="page"
+        :total-rows="count"
+        :per-page="pageSize"
+        prev-text="Prev"
+        next-text="Next"
+        @change="handlePageChange"
+      ></b-pagination>
+    </div>
+    
+    </div>
+             
+             
+    <!-- <div class="col-md-6">
+      <h4>Routes List</h4>
+      <ul class="list-group" id="routes-list">
+        <li
+          class="list-group-item"
+          v-for="(route, index) in desserts"
+          :key="index"
+        >
+          {{ route.id }}
+        </li>
+      </ul>
+    </div> -->
+
+
         <v-dialog v-model="dialogDetails">
           <v-card>
 
@@ -166,11 +220,8 @@
           </v-card>
         </v-dialog>
 
-
-
-
-
     </div>
+
           <div v-else>
             <Graphdisplay v-bind:graph="GRAPH"></Graphdisplay>
           </div>
@@ -180,6 +231,7 @@
 import axios from 'axios';
 import { post } from "axios";
 import Graphdisplay from "./Graphdisplay.vue"
+import RouteDataService from "../services/dataServices";
   export default {
     name: 'HelloWorld',
     components:{
@@ -199,7 +251,23 @@ import Graphdisplay from "./Graphdisplay.vue"
         load_to:"",
         load_rwt:"",
         load_at:"",
+        currentPage: 1,
+        rows: 0,
+        perPage: 5,
         GRAPH:{},
+        params:{},
+        routes: [],
+        actual_data:[],
+      currentRoute: null,
+      currentIndex: -1,
+      searchQuery: "",
+
+      page: 1,
+      count: 0,
+      pageSize: 4,
+
+      pageSizes: [2, 4, 6, 8],
+
         //payload:{},
         headers: [
           { text: 'ID', align: 'start', sortable: true, value: 'id'},
@@ -219,14 +287,14 @@ import Graphdisplay from "./Graphdisplay.vue"
         rowClicked(item){
           this.dialogDetails = true;
           this.detailEdit = item
-          console.log(item.name);
+          console.log(item.id);
         },
         createGraph(){
             this.tableon = false;
             this.GRAPH = {
               "src" : this.selectedSource,
               "des" : this.selectedDestination,
-              "EDGE_LIST" : this.desserts
+              "EDGE_LIST" : this.actual_data
             }
             console.log("SelectedSource" + this.selectedSource);
             console.log("SelectedDesti" + this.selectedDestination);
@@ -241,11 +309,7 @@ import Graphdisplay from "./Graphdisplay.vue"
           axios.post("http://localhost:9090/add", payload)
                .then(response=>{
                  console.log(response);
-                 axios.get("http://localhost:9090/")
-                       .then(response => {
-                                            console.log(response.data);
-                                            this.desserts = response.data;
-                                          });
+                 this.retrieveRouteDetails();
                })
                .catch((error)=>{
                  console.log(error)
@@ -262,11 +326,7 @@ import Graphdisplay from "./Graphdisplay.vue"
           axios.put("http://localhost:9090/update", item)
                .then(response=>{
                  console.log(response);
-                 axios.get("http://localhost:9090/")
-                       .then(response => {
-                                            console.log(response.data);
-                                            this.desserts = response.data;
-                                          });
+                 this.retrieveRouteDetails()
                })
                .catch((error)=>{
                  console.log(error)
@@ -278,18 +338,12 @@ import Graphdisplay from "./Graphdisplay.vue"
           axios.delete("http://localhost:9090/srcdes/" + id)
                 .then(response=>{
                   console.log(response);
+                  this.retrieveRouteDetails();
                 })
                 .catch((error)=>{
                  console.log(error)
                })
           console.log("delete button clicked!!" + id);
-//refresh
-          axios.get("http://localhost:9090/")
-                       .then(response => {
-                                            console.log(response.data);
-                                            this.desserts = response.data;
-                                          });
-
           this.dialogDetails = false;
 
         },
@@ -311,12 +365,64 @@ import Graphdisplay from "./Graphdisplay.vue"
             post(url, formData, config).then(() => {
                   axios.get("http://localhost:9090/")
                        .then(response => {
-                                            console.log(response.data);
-                                            this.desserts = response.data;
+                                            console.log(response.data.content);
+                                            this.desserts = response.data.content;
                                           });
                   alert("file uploaded");
             });
         },
+
+
+      getRequestParams(searchQuery, page, pageSize) {
+      let params = {};
+
+      if (searchQuery) {
+        params["q"] = searchQuery;
+      }
+
+      if (page) {
+        params["page"] = page;
+      }
+
+      if (pageSize) {
+        params["page_size"] = pageSize;
+      }
+
+      return params;
+    },
+
+    retrieveRouteDetails() {
+      this.params = {
+        "page" : this.page,
+        "pageSize" : this.pageSize,
+        "seachQuery": this.searchQuery
+      };
+      console.log("I am inside retriceRouteDetails " + this.params);
+      RouteDataService.getAll(this.params)
+        .then(response =>{
+            this.desserts = response.data.content;
+        });
+
+    },
+
+    handlePageChange(value) {
+      this.page = value;
+      console.log("handle page change called"+ value);
+      this.retrieveRouteDetails();
+    },
+
+    load(){
+      console.log("button pressed!!")
+        this.tableon = true;
+    },
+
+    handlePageSizeChange(event) {
+      this.pageSize = event.target.value;
+      console.log("Pagesize changed called where new size ->" + this.pageSize);
+      this.page = 1;
+      this.retrieveRouteDetails();
+    },
+
 
 
       },
@@ -324,13 +430,38 @@ import Graphdisplay from "./Graphdisplay.vue"
         axios.get("http://localhost:9090/")
         .then(response => {
           console.log(response.data);
-          this.desserts = response.data;
+          this.actual_data = response.data.content;
+          var s1 = new Set();
+            for(var i=0;i<this.actual_data.length;i++)
+              {
+                s1.add(this.actual_data[i].from);
+                s1.add(this.actual_data[i].to);
+              }
+            this.routes = Array.from(s1);
+            console.log(this.routes);
         });
+
         
+        this.params = {
+          "page" : 1,
+          "pageSize" : 4,
+          "seachQuery": ""
+        }
+        RouteDataService.getAll(this.params)
+        .then(response =>{
+            this.desserts = response.data.content;
+            this.count = response.data.totalPages;
+            console.log(response.data.totalPages + "totalpages");
+        })
+        .catch((error)=>{
+          console.log(error);
+        })
+      //  var url = "http://localhost:9090/" + "?page="+ this.params.page +"&page_size=" + this.params.pageSize + "&q=" + this.params.seachQuery;
+
   },
       computed: {
               isLoading: function () {
-                      return !this.desserts.length;
+                      return !this.routes.length;
                  },
               
       }
@@ -355,7 +486,9 @@ body {
     color: red;
 }
 
-#question,
+#question{
+  align-content: flex-start;
+}
 #info {
     width: 100%;
     text-align: center;
@@ -407,6 +540,15 @@ body {
 
 #buttons {
     margin: auto;
+}
+
+.btn1 {
+  background-color: DodgerBlue;
+  border: none;
+  color: white;
+  padding: 12px 16px;
+  font-size: 16px;
+  cursor: pointer;
 }
 </style>
 

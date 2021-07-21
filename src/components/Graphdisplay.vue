@@ -6,8 +6,9 @@
               <div id="buttons">
               <br>
               <center>
-                  <button type="button" class="btn btn-info" id="NEW_GRAPH">NEW-PROBLEM</button>
-                  <button type="button" class="btn btn-secondary" id="solve">SOLUTION</button>
+                  <button type="button" class="btn btn-success" id="NEW_GRAPH">Preview Graph</button>
+                  <!-- <button type="button" class="btn btn-secondary" id="solve">SOLUTION</button> -->
+                  <v-btn color="primary" id="solve" >SOLUTION</v-btn>
               </center>
     </div>    
     </div>
@@ -463,7 +464,7 @@ body {
 
 #FIRST_HALF {
   border: 5px solid #0286a1;
-  height: 100vh;
+  height: 70vh;
 }
 
 #SECOND_HALF {
